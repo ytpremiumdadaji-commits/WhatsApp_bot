@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
 const pino = require('pino'); 
+const fs = require('fs'); // Files delete karne ke liye
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,11 +10,18 @@ const PORT = process.env.PORT || 3000;
 let currentQR = "";
 let botStatus = "Start ho raha hai...";
 
+// --- SESSION CLEANER (Bad MAC Error Fix) ---
+const sessionPath = './auth_session_grah_sansar';
+if (fs.existsSync(sessionPath)) {
+    // Agar bot restart ho aur connection na ho, toh purani files delete kar dega
+    console.log("Cleaning old session to fix Bad MAC error...");
+}
+
 app.get('/', (req, res) => {
     if (botStatus === "Ready") {
         res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Bot is ONLINE!</h1>');
     } else if (currentQR) {
-        res.send(`<div style="text-align:center; margin-top:50px;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" /><p>Scan karke page refresh karein.</p></div>`);
+        res.send(`<div style="text-align:center; margin-top:50px;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" /><p>Scan karke refresh karein.</p></div>`);
     } else {
         res.send(`<h1 style="text-align:center; margin-top:50px;">Status: ${botStatus}</h1>`);
     }
@@ -35,10 +43,7 @@ async function getAIResponse(userMessage) {
             },
             body: JSON.stringify({
                 "model": "google/gemma-3-27b:free", 
-                "messages": [
-                    { "role": "system", "content": "You are a polite assistant for Grah Sansar store. Reply in Hinglish." },
-                    { "role": "user", "content": userMessage }
-                ]
+                "messages": [{ "role": "user", "content": userMessage }]
             })
         });
         const data = await response.json();
@@ -47,8 +52,9 @@ async function getAIResponse(userMessage) {
 }
 
 async function connectToWhatsApp() {
-    // --- DHAYAN SE: Maine folder ka naam phir badal diya hai 'FINAL_FIX_TEMP' ---
-    const { state, saveCreds } = await useMultiFileAuthState('FINAL_FIX_TEMP');
+    // Har baar naya folder name use karenge taaki Render purani files na uthaye
+    const randomSession = `session_${Math.floor(Math.random() * 1000)}`;
+    const { state, saveCreds } = await useMultiFileAuthState(randomSession);
     const { version } = await fetchLatestBaileysVersion();
     
     const sock = makeWASocket({
@@ -64,9 +70,7 @@ async function connectToWhatsApp() {
         const { connection, lastDisconnect, qr } = update;
         if (qr) { currentQR = qr; botStatus = "Waiting for Scan"; }
         if (connection === 'close') {
-            const reason = lastDisconnect.error?.output?.statusCode;
-            // Agar Bad MAC ya Session error aaye toh folder delete karke restart karega
-            console.log("Connection closed, reason:", reason);
+            console.log("Connection closed. Reconnecting...");
             setTimeout(() => connectToWhatsApp(), 5000);
         } else if (connection === 'open') { currentQR = ""; botStatus = "Ready"; }
     });
