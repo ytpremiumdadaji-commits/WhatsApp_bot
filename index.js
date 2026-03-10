@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
 const pino = require('pino'); 
 
 const app = express();
@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 3000;
 let currentQR = "";
 let botStatus = "Start ho raha hai... Please wait.";
 
-// --- WEBPAGE PAR QR CODE DIKHANE KA SETUP ---
 app.get('/', (req, res) => {
     if (botStatus === "Ready") {
         res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ WhatsApp Bot is Running Super Fast (Baileys)!</h1>');
@@ -32,7 +31,6 @@ app.listen(PORT, () => {
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// --- AI REPLY FUNCTION ---
 async function getAIResponse(userMessage) {
     try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -64,15 +62,20 @@ async function getAIResponse(userMessage) {
     }
 }
 
-// --- BAILEYS (SUPER FAST) WHATSAPP SETUP ---
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    // 1. Purani corrupt file ko chhod kar naya fresh folder banayega
+    const { state, saveCreds } = await useMultiFileAuthState('auth_session_new_fresh');
+    
+    // 2. WhatsApp ka ekdum latest version fetch karega taaki disconnect na ho
+    const { version } = await fetchLatestBaileysVersion();
+    console.log(`Using WhatsApp v${version.join('.')}`);
 
     const sock = makeWASocket({
+        version, // Latest version attach kar diya
         auth: state,
         logger: pino({ level: 'silent' }), 
-        printQRInTerminal: false, // <-- YAHAN YELLOW WARNING FIX KI GAYI HAI
-        browser: ['Mac OS', 'Chrome', '121.0.0'], // <-- YAHAN DISCONNECT WALI PROBLEM FIX KI GAYI HAI
+        printQRInTerminal: false, 
+        browser: Browsers.macOS('Desktop'), // Official tareeqa browser set karne ka
         syncFullHistory: false 
     });
 
@@ -89,7 +92,7 @@ async function connectToWhatsApp() {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Connection band ho gaya. Reconnecting...', shouldReconnect);
             if (shouldReconnect) {
-                setTimeout(() => connectToWhatsApp(), 2000); // 2 second wait karke reconnect karega
+                setTimeout(() => connectToWhatsApp(), 3000); 
             }
         } else if (connection === 'open') {
             currentQR = "";
