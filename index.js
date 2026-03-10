@@ -1,30 +1,28 @@
-require('dotenv').config(); 
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+require('dotenv').config();
 const express = require('express');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const pino = require('pino'); // Baileys ko chalane ke liye zaroori
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 let currentQR = "";
-let botStatus = "Start ho raha hai... Please wait 1-2 minutes.";
+let botStatus = "Start ho raha hai... Please wait.";
 
-// --- NAYA JUGAAAD: BOT START HONE KA TIME RECORD KAR LIYA ---
-const botStartTime = Math.floor(Date.now() / 1000); 
-
+// --- WEBPAGE PAR QR CODE DIKHANE KA SETUP ---
 app.get('/', (req, res) => {
     if (botStatus === "Ready") {
-        res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ WhatsApp Bot is Running Successfully!</h1>');
+        res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Grah Sansar WhatsApp Bot is Running Super Fast (Baileys)!</h1>');
     } else if (currentQR) {
         res.send(`
             <div style="text-align:center; margin-top:50px; font-family: sans-serif;">
                 <h2>WhatsApp se connect karne ke liye QR Code Scan karein:</h2>
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" alt="QR Code" style="margin: 20px; padding: 10px; border: 2px solid black;" />
-                <p style="color: red;">Note: Agar code scan nahi ho raha (expire ho gaya), toh is page ko <strong>Refresh</strong> karein.</p>
+                <p style="color: red;">Note: Agar scan na ho, toh page ko refresh karein.</p>
             </div>
         `);
     } else {
-        res.send(`<h1 style="text-align:center; margin-top:50px; font-family: sans-serif;">Status: ${botStatus}</h1><p style="text-align:center;">Kripya thodi der wait karein aur fir is page ko refresh karein...</p>`);
+        res.send(`<h1 style="text-align:center; margin-top:50px; font-family: sans-serif;">Status: ${botStatus}</h1>`);
     }
 });
 
@@ -32,8 +30,9 @@ app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; 
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
+// --- AI REPLY FUNCTION ---
 async function getAIResponse(userMessage) {
     try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -65,68 +64,69 @@ async function getAIResponse(userMessage) {
     }
 }
 
-// WhatsApp Client Setup 
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    authTimeoutMs: 60000, 
-    puppeteer: {
-        headless: true, 
-        timeout: 0, 
-        args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu',
-            '--disable-background-networking', 
-            '--disable-default-apps',
-            '--disable-extensions',
-            '--disable-sync',
-            '--disable-translate',
-            '--hide-scrollbars',
-            '--metrics-recording-only',
-            '--mute-audio',
-            '--no-safebrowsing',
-            '--js-flags=--max-old-space-size=256',
-            '--blink-settings=imagesEnabled=false' // <--- SUPER FAST LOGIN FIX (Photos load nahi hongi)
-        ] 
-    },
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-    }
-});
+// --- BAILEYS (SUPER FAST) WHATSAPP SETUP ---
+async function connectToWhatsApp() {
+    // Session save karne ke liye folder
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
-// Jab naya QR Code aaye
-client.on('qr', (qr) => {
-    currentQR = qr; 
-    botStatus = "Waiting for QR Scan";
-    console.log('✅ Naya QR Code aa gaya hai! Apne Render URL (webpage) par jaakar scan karein.');
-});
+    const sock = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }), // Faltu ke logs band kar diye
+        printQRInTerminal: true, 
+        browser: ["Grah Sansar Bot", "Chrome", "1.0.0"],
+        syncFullHistory: false, // <-- PURANE MESSAGES SYNC NAHI HONGE (No Crash!)
+        generateHighQualityLinkPreview: false
+    });
 
-// Jab bot successfully connect ho jaye
-client.on('ready', () => {
-    currentQR = ""; 
-    botStatus = "Ready";
-    console.log('✅ WhatsApp Bot successfully connect ho gaya hai aur ready hai!');
-});
+    // Connection Updates (QR Code, Connect, Disconnect)
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-// Jab koi naya message aaye
-client.on('message', async (msg) => {
-    // --- NAYA JUGAAAD: PURANE MESSAGES KO IGNORE KAREIN ---
-    if (msg.timestamp < botStartTime) {
-        console.log("Skipping old message...");
-        return; 
-    }
+        if (qr) {
+            currentQR = qr;
+            botStatus = "Waiting for QR Scan";
+            console.log('✅ Naya QR Code aa gaya hai! Render URL par jaakar scan karein.');
+        }
 
-    if (msg.from === 'status@broadcast' || msg.isGroupMsg) return;
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Connection band ho gaya. Reconnecting...', shouldReconnect);
+            if (shouldReconnect) {
+                connectToWhatsApp(); // Connection tootne par apne aap wapas judega
+            }
+        } else if (connection === 'open') {
+            currentQR = "";
+            botStatus = "Ready";
+            console.log('✅ Baileys Bot successfully connect ho gaya hai aur ready hai!');
+        }
+    });
 
-    console.log(`Naya Customer Message: ${msg.body}`);
-    const aiReply = await getAIResponse(msg.body);
-    msg.reply(aiReply);
-});
+    // Login credentials save karna taaki baar baar scan na karna pade
+    sock.ev.on('creds.update', saveCreds);
 
-client.initialize();
+    // Naya message aane par
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+        
+        const msg = messages[0];
+        
+        // Khud ke bheje message ya bina text wale message ko ignore karein
+        if (!msg.message || msg.key.fromMe) return;
+
+        // Message ka text nikalna (Baileys mein text nikalne ka tareeqa alag hota hai)
+        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        
+        if (!textMessage) return;
+
+        console.log(`Naya Customer Message: ${textMessage}`);
+
+        // AI se reply generate karwana
+        const aiReply = await getAIResponse(textMessage);
+        
+        // Customer ko reply bhejna
+        await sock.sendMessage(msg.key.remoteJid, { text: aiReply });
+    });
+}
+
+// Bot shuru karein
+connectToWhatsApp();
