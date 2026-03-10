@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-    res.send('WhatsApp Bot is running successfully!');
+    res.send('WhatsApp Bot is running successfully in Memory-Saver Mode!');
 });
 
 app.listen(PORT, () => {
@@ -49,10 +49,11 @@ async function getAIResponse(userMessage) {
     }
 }
 
-// WhatsApp Client Setup with Render Cloud Server Settings
+// WhatsApp Client Setup with Render Cloud Server Settings (MEMORY FIX APPLIED)
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
+        headless: true, // Background me chalane ke liye fix
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox',
@@ -61,8 +62,19 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--single-process',
-            '--disable-gpu'
-        ] // Yeh saari settings Render par browser ko bina error ke chalane ke liye zaroori hain
+            '--disable-gpu',
+            // --- Naye Memory Saving Features ---
+            '--disable-background-networking', 
+            '--disable-default-apps',
+            '--disable-extensions',
+            '--disable-sync',
+            '--disable-translate',
+            '--hide-scrollbars',
+            '--metrics-recording-only',
+            '--mute-audio',
+            '--no-safebrowsing',
+            '--js-flags=--max-old-space-size=256' // Node.js ki memory limit half kardi
+        ] 
     }
 });
 
