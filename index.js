@@ -6,15 +6,16 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- NAYA JUGAAAD (WEBPAGE PAR BADA QR CODE DIKHANE KE LIYE) ---
 let currentQR = "";
 let botStatus = "Start ho raha hai... Please wait 1-2 minutes.";
+
+// --- NAYA JUGAAAD: BOT START HONE KA TIME RECORD KAR LIYA ---
+const botStartTime = Math.floor(Date.now() / 1000); 
 
 app.get('/', (req, res) => {
     if (botStatus === "Ready") {
         res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ WhatsApp Bot is Running Successfully!</h1>');
     } else if (currentQR) {
-        // Yahan webpage par original QR code ki photo bankar aayegi
         res.send(`
             <div style="text-align:center; margin-top:50px; font-family: sans-serif;">
                 <h2>WhatsApp se connect karne ke liye QR Code Scan karein:</h2>
@@ -64,7 +65,7 @@ async function getAIResponse(userMessage) {
     }
 }
 
-// WhatsApp Client Setup (MEMORY & TIMEOUT FIX APPLIED)
+// WhatsApp Client Setup 
 const client = new Client({
     authStrategy: new LocalAuth(),
     authTimeoutMs: 60000, 
@@ -89,7 +90,8 @@ const client = new Client({
             '--metrics-recording-only',
             '--mute-audio',
             '--no-safebrowsing',
-            '--js-flags=--max-old-space-size=256'
+            '--js-flags=--max-old-space-size=256',
+            '--blink-settings=imagesEnabled=false' // <--- SUPER FAST LOGIN FIX (Photos load nahi hongi)
         ] 
     },
     webVersionCache: {
@@ -100,10 +102,9 @@ const client = new Client({
 
 // Jab naya QR Code aaye
 client.on('qr', (qr) => {
-    currentQR = qr; // QR code save kar liya webpage ke liye
+    currentQR = qr; 
     botStatus = "Waiting for QR Scan";
     console.log('✅ Naya QR Code aa gaya hai! Apne Render URL (webpage) par jaakar scan karein.');
-    qrcode.generate(qr, { small: true });
 });
 
 // Jab bot successfully connect ho jaye
@@ -115,9 +116,15 @@ client.on('ready', () => {
 
 // Jab koi naya message aaye
 client.on('message', async (msg) => {
+    // --- NAYA JUGAAAD: PURANE MESSAGES KO IGNORE KAREIN ---
+    if (msg.timestamp < botStartTime) {
+        console.log("Skipping old message...");
+        return; 
+    }
+
     if (msg.from === 'status@broadcast' || msg.isGroupMsg) return;
 
-    console.log(`Customer Message: ${msg.body}`);
+    console.log(`Naya Customer Message: ${msg.body}`);
     const aiReply = await getAIResponse(msg.body);
     msg.reply(aiReply);
 });
