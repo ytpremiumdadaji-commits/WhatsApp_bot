@@ -5,7 +5,7 @@ const pino = require('pino');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const PHONE_NUMBER = "91XXXXXXXXXX"; // <-- Yahan apna number daaliye (91 ke saath)
+const PHONE_NUMBER = "919584584988"; // <-- Yahan apna number daaliye (91 ke saath)
 
 let pairingCode = "";
 let botStatus = "Start ho raha hai...";
