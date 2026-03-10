@@ -5,25 +5,23 @@ const pino = require('pino');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const PHONE_NUMBER = "919584584988"; // <-- Yahan apna number daaliye (91 ke saath)
 
-let pairingCode = "";
-let botStatus = "Start ho raha hai...";
+let currentQR = "";
+let botStatus = "Starting...";
 
 app.get('/', (req, res) => {
     if (botStatus === "Ready") {
-        res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Bot Online Hai!</h1>');
-    } else if (pairingCode) {
+        res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Grah Sansar Bot is LIVE!</h1>');
+    } else if (currentQR) {
         res.send(`
-            <div style="text-align:center; margin-top:50px; font-family: sans-serif;">
-                <h2 style="color: #075e54;">Aapka Pairing Code:</h2>
-                <h1 style="background: #e1f5fe; padding: 20px; display: inline-block; border: 2px dashed #03a9f4; letter-spacing: 5px;">${pairingCode}</h1>
-                <p><b>Kaise use karein:</b> Phone mein WhatsApp > Linked Devices > Link with phone number par jayein aur ye code daalein.</p>
-                <p>Note: Code har 1 minute mein badalta hai, refresh karte rahein.</p>
+            <div style="text-align:center; margin-top:50px;">
+                <h2>QR Scan Karein:</h2>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" style="border: 5px solid #25d366; border-radius: 10px;" />
+                <p>Scan ke baad 1 min wait karein aur page refresh karein.</p>
             </div>
         `);
     } else {
-        res.send(`<h1 style="text-align:center; margin-top:50px;">Status: ${botStatus}</h1><p style="text-align:center;">Refresh karein agar code na dikhe...</p>`);
+        res.send(`<h1 style="text-align:center; margin-top:50px;">Status: ${botStatus}</h1>`);
     }
 });
 
@@ -41,7 +39,7 @@ async function getAIResponse(userMessage) {
             },
             body: JSON.stringify({
                 "model": "google/gemma-3-27b:free", 
-                "messages": [{ "role": "user", "content": userMessage }]
+                "messages": [{ "role": "system", "content": "You are a respectful assistant for Grah Sansar store. Reply in Hinglish." }, { "role": "user", "content": userMessage }]
             })
         });
         const data = await response.json();
@@ -50,7 +48,8 @@ async function getAIResponse(userMessage) {
 }
 
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('session_pairing_mode');
+    // Har baar naya session folder taaki Bad MAC error kabhi na aaye
+    const { state, saveCreds } = await useMultiFileAuthState('session_final_v100');
     const { version } = await fetchLatestBaileysVersion();
     
     const sock = makeWASocket({
@@ -58,33 +57,18 @@ async function connectToWhatsApp() {
         auth: state, 
         logger: pino({ level: 'silent' }), 
         printQRInTerminal: false, 
-        browser: ["Ubuntu", "Chrome", "20.0.04"], // Browser name must be fixed
-        syncFullHistory: false
+        browser: Browsers.macOS('Desktop'), // Standard desktop browser
+        syncFullHistory: false, // RAM bachane ke liye sabse zaroori
+        maxMsgRetryCount: 1
     });
 
-    // --- PAIRING CODE GENERATOR ---
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                let code = await sock.requestPairingCode(PHONE_NUMBER);
-                pairingCode = code?.match(/.{1,4}/g)?.join("-") || code;
-                console.log(`✅ Pairing Code Generated: ${pairingCode}`);
-                botStatus = "Code Ready";
-            } catch (err) {
-                console.log("Pairing Code Error:", err);
-            }
-        }, 5000); // 5 sec wait karke code generate karega
-    }
-
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) { currentQR = qr; botStatus = "Waiting for Scan"; }
         if (connection === 'close') {
-            setTimeout(() => connectToWhatsApp(), 5000);
-        } else if (connection === 'open') { 
-            pairingCode = ""; 
-            botStatus = "Ready"; 
-            console.log('✅ Connected!'); 
-        }
+            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) setTimeout(() => connectToWhatsApp(), 5000);
+        } else if (connection === 'open') { currentQR = ""; botStatus = "Ready"; }
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -93,7 +77,9 @@ async function connectToWhatsApp() {
         if (type !== 'notify') return;
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
-        const aiReply = await getAIResponse(msg.message.conversation || msg.message.extendedTextMessage?.text);
+        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        if (!textMessage) return;
+        const aiReply = await getAIResponse(textMessage);
         await sock.sendMessage(msg.key.remoteJid, { text: aiReply });
     });
 }
