@@ -11,11 +11,11 @@ let botStatus = "Start ho raha hai...";
 
 app.get('/', (req, res) => {
     if (botStatus === "Ready") {
-        res.send('<h1 style="color:green; text-align:center; margin-top:50px; font-family: sans-serif;">✅ Grah Sansar Bot is ONLINE!</h1>');
+        res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Bot is ONLINE!</h1>');
     } else if (currentQR) {
-        res.send(`<div style="text-align:center; margin-top:50px; font-family: sans-serif;"><h2>QR Scan Karein:</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" style="border: 5px solid #25d366; border-radius: 10px;" /><p>Scan karne ke baad webpage refresh karein.</p></div>`);
+        res.send(`<div style="text-align:center; margin-top:50px;"><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" /><p>Scan karke page refresh karein.</p></div>`);
     } else {
-        res.send(`<h1 style="text-align:center; margin-top:50px; font-family: sans-serif;">Status: ${botStatus}</h1>`);
+        res.send(`<h1 style="text-align:center; margin-top:50px;">Status: ${botStatus}</h1>`);
     }
 });
 
@@ -36,21 +36,19 @@ async function getAIResponse(userMessage) {
             body: JSON.stringify({
                 "model": "google/gemma-3-27b:free", 
                 "messages": [
-                    { "role": "system", "content": "You are a polite assistant for 'Grah Sansar Department Store'. Reply in Hinglish. Ask for grocery list and delivery address." },
+                    { "role": "system", "content": "You are a polite assistant for Grah Sansar store. Reply in Hinglish." },
                     { "role": "user", "content": userMessage }
                 ]
             })
         });
-
         const data = await response.json();
-        if (data.choices && data.choices[0]) return data.choices[0].message.content;
-        return "Maaf kijiyega, bheed zyada hai. Baad mein message karein.";
-    } catch (e) { return "Network issue hai."; }
+        return data.choices[0].message.content;
+    } catch (e) { return "Network busy."; }
 }
 
 async function connectToWhatsApp() {
-    // --- YAHAN NAAM BADAL DIYA HAI TAAKI FRESH LOGIN HO ---
-    const { state, saveCreds } = await useMultiFileAuthState('session_fresh_start_now');
+    // --- DHAYAN SE: Maine folder ka naam phir badal diya hai 'FINAL_FIX_TEMP' ---
+    const { state, saveCreds } = await useMultiFileAuthState('FINAL_FIX_TEMP');
     const { version } = await fetchLatestBaileysVersion();
     
     const sock = makeWASocket({
@@ -59,17 +57,17 @@ async function connectToWhatsApp() {
         logger: pino({ level: 'silent' }), 
         printQRInTerminal: false, 
         browser: Browsers.macOS('Desktop'), 
-        syncFullHistory: false,
-        // --- BAD MAC ERROR ROKNE KE LIYE SETTING ---
-        shouldIgnoreJid: (jid) => false
+        syncFullHistory: false
     });
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) { currentQR = qr; botStatus = "Waiting for Scan"; }
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) setTimeout(() => connectToWhatsApp(), 5000);
+            const reason = lastDisconnect.error?.output?.statusCode;
+            // Agar Bad MAC ya Session error aaye toh folder delete karke restart karega
+            console.log("Connection closed, reason:", reason);
+            setTimeout(() => connectToWhatsApp(), 5000);
         } else if (connection === 'open') { currentQR = ""; botStatus = "Ready"; }
     });
 
@@ -85,5 +83,4 @@ async function connectToWhatsApp() {
         await sock.sendMessage(msg.key.remoteJid, { text: aiReply });
     });
 }
-
 connectToWhatsApp();
