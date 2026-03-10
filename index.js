@@ -1,9 +1,8 @@
-const fetch = require('node-fetch'); // Agar node version purana hai toh
+// Kisi package ki zaroorat nahi hai
+async function testAPI() {
+    const MY_KEY = "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"; // <-- Apni OpenRouter key yahan paste karein
 
-async function testMyAPI() {
-    const MY_KEY = "YAHAN_APNI_OPENROUTER_API_KEY_DAALEIN"; // <-- Apni key paste karein
-
-    console.log("--- AI Testing Start Ho Rahi Hai ---");
+    console.log("--- AI Testing Start ---");
 
     try {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -13,24 +12,23 @@ async function testMyAPI() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                "model": "google/gemma-2-9b-it:free",
+                "model": "google/gemma-3-27b:free",
                 "messages": [
-                    { "role": "user", "content": "Hello, kya tum kaam kar rahe ho?" }
+                    { "role": "user", "content": "Hello, testing API connection." }
                 ]
             })
         });
 
         const data = await response.json();
 
-        if (data.choices && data.choices[0]) {
-            console.log("✅ SUCCESS! AI ka reply aaya:", data.choices[0].message.content);
+        if (data.choices) {
+            console.log("✅ SUCCESS! AI Reply: ", data.choices[0].message.content);
         } else {
-            console.log("❌ ERROR! AI ne reply nahi diya. Details niche dekho:");
-            console.log(JSON.stringify(data, null, 2));
+            console.log("❌ AI ERROR: ", JSON.stringify(data));
         }
-    } catch (error) {
-        console.log("❌ CONNECTION ERROR! Internet ya URL mein dikkat hai:", error.message);
+    } catch (err) {
+        console.log("❌ CONNECTION ERROR: ", err.message);
     }
 }
 
-testMyAPI();
+testAPI();
