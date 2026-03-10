@@ -3,7 +3,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 
-// Render ke liye ek chota Express server (Render ko ek port par active rehna zaroori hai)
+// Render ke liye ek chota Express server
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -30,8 +30,9 @@ async function getAIResponse(userMessage) {
                 "model": "gpt-oss-120b", 
                 "messages": [
                     {
+                        // YAHAN AI KA BEHAVIOR UPDATE KIYA GAYA HAI
                         "role": "system",
-                        "content": "Tum ek grocery store ke smart aur polite assistant ho. Tumhara kaam customers ki grocery list receive karna, items confirm karna, aur unka address aur mobile number poochna hai. Hamesha chote, clear aur Hinglish/Hindi mein reply karo. Agar koi aisi cheez pooche jo dukan se related nahi hai, toh politely mana kar do."
+                        "content": "You are a smart, highly respectful assistant for 'Grah Sansar Department Store'. Your task is to receive grocery lists, confirm items, and ask for the customer's delivery address and mobile number.\n\nCRITICAL RULES:\n1. LANGUAGE MATCHING: If the customer writes in English, reply in pure English. If they write in Hindi or Hinglish, reply in clear Hindi/Hinglish.\n2. TONE & RESPECT: Always be extremely polite. Use words like 'Sir/Ma'am', 'Please', and 'Thank you' in English. Use 'Ji', 'Aap', 'Kripya', and 'Dhanyawad' in Hindi/Hinglish. Never be rude.\n3. Keep your replies short, clear, and professional.\n4. If asked about non-grocery topics, politely decline."
                     },
                     {
                         "role": "user",
@@ -63,7 +64,7 @@ const client = new Client({
             '--no-zygote',
             '--single-process',
             '--disable-gpu',
-            // --- Naye Memory Saving Features ---
+            // --- Memory Saving Features ---
             '--disable-background-networking', 
             '--disable-default-apps',
             '--disable-extensions',
@@ -73,12 +74,12 @@ const client = new Client({
             '--metrics-recording-only',
             '--mute-audio',
             '--no-safebrowsing',
-            '--js-flags=--max-old-space-size=256' // Node.js ki memory limit half kardi
+            '--js-flags=--max-old-space-size=256'
         ] 
     }
 });
 
-// QR Code generate karna (Terminal me scan karne ke liye)
+// QR Code generate karna
 client.on('qr', (qr) => {
     console.log('Neeche diye gaye QR Code ko apne dukan wale WhatsApp se scan karein:');
     qrcode.generate(qr, { small: true });
