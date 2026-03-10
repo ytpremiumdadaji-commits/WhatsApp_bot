@@ -1,21 +1,36 @@
-require('dotenv').config(); // Local testing ke liye .env file read karega
+require('dotenv').config(); 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 
-// Render ke liye ek chota Express server
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// --- NAYA JUGAAAD (WEBPAGE PAR BADA QR CODE DIKHANE KE LIYE) ---
+let currentQR = "";
+let botStatus = "Start ho raha hai... Please wait 1-2 minutes.";
+
 app.get('/', (req, res) => {
-    res.send('WhatsApp Bot is running successfully in Memory-Saver Mode!');
+    if (botStatus === "Ready") {
+        res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ WhatsApp Bot is Running Successfully!</h1>');
+    } else if (currentQR) {
+        // Yahan webpage par original QR code ki photo bankar aayegi
+        res.send(`
+            <div style="text-align:center; margin-top:50px; font-family: sans-serif;">
+                <h2>WhatsApp se connect karne ke liye QR Code Scan karein:</h2>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" alt="QR Code" style="margin: 20px; padding: 10px; border: 2px solid black;" />
+                <p style="color: red;">Note: Agar code scan nahi ho raha (expire ho gaya), toh is page ko <strong>Refresh</strong> karein.</p>
+            </div>
+        `);
+    } else {
+        res.send(`<h1 style="text-align:center; margin-top:50px; font-family: sans-serif;">Status: ${botStatus}</h1><p style="text-align:center;">Kripya thodi der wait karein aur fir is page ko refresh karein...</p>`);
+    }
 });
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-// Environment variable se API key fetch karna
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; 
 
 async function getAIResponse(userMessage) {
@@ -30,7 +45,6 @@ async function getAIResponse(userMessage) {
                 "model": "gpt-oss-120b", 
                 "messages": [
                     {
-                        // YAHAN AI KA BEHAVIOR UPDATE KIYA GAYA HAI
                         "role": "system",
                         "content": "You are a smart, highly respectful assistant for 'Grah Sansar Department Store'. Your task is to receive grocery lists, confirm items, and ask for the customer's delivery address and mobile number.\n\nCRITICAL RULES:\n1. LANGUAGE MATCHING: If the customer writes in English, reply in pure English. If they write in Hindi or Hinglish, reply in clear Hindi/Hinglish.\n2. TONE & RESPECT: Always be extremely polite. Use words like 'Sir/Ma'am', 'Please', and 'Thank you' in English. Use 'Ji', 'Aap', 'Kripya', and 'Dhanyawad' in Hindi/Hinglish. Never be rude.\n3. Keep your replies short, clear, and professional.\n4. If asked about non-grocery topics, politely decline."
                     },
@@ -50,11 +64,13 @@ async function getAIResponse(userMessage) {
     }
 }
 
-// WhatsApp Client Setup with Render Cloud Server Settings (MEMORY FIX APPLIED)
+// WhatsApp Client Setup (MEMORY & TIMEOUT FIX APPLIED)
 const client = new Client({
     authStrategy: new LocalAuth(),
+    authTimeoutMs: 60000, 
     puppeteer: {
-        headless: true, // Background me chalane ke liye fix
+        headless: true, 
+        timeout: 0, 
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox',
@@ -64,7 +80,6 @@ const client = new Client({
             '--no-zygote',
             '--single-process',
             '--disable-gpu',
-            // --- Memory Saving Features ---
             '--disable-background-networking', 
             '--disable-default-apps',
             '--disable-extensions',
@@ -76,33 +91,35 @@ const client = new Client({
             '--no-safebrowsing',
             '--js-flags=--max-old-space-size=256'
         ] 
+    },
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// QR Code generate karna
+// Jab naya QR Code aaye
 client.on('qr', (qr) => {
-    console.log('Neeche diye gaye QR Code ko apne dukan wale WhatsApp se scan karein:');
+    currentQR = qr; // QR code save kar liya webpage ke liye
+    botStatus = "Waiting for QR Scan";
+    console.log('✅ Naya QR Code aa gaya hai! Apne Render URL (webpage) par jaakar scan karein.');
     qrcode.generate(qr, { small: true });
 });
 
 // Jab bot successfully connect ho jaye
 client.on('ready', () => {
+    currentQR = ""; 
+    botStatus = "Ready";
     console.log('✅ WhatsApp Bot successfully connect ho gaya hai aur ready hai!');
 });
 
 // Jab koi naya message aaye
 client.on('message', async (msg) => {
-    // Status replies aur Group messages par reply na karein
     if (msg.from === 'status@broadcast' || msg.isGroupMsg) return;
 
     console.log(`Customer Message: ${msg.body}`);
-
-    // AI se reply generate karwana
     const aiReply = await getAIResponse(msg.body);
-    
-    // Customer ko reply bhejna
     msg.reply(aiReply);
 });
 
-// Bot ko start karna
 client.initialize();
