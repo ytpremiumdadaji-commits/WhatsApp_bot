@@ -37,7 +37,7 @@ async function getAIResponse(userMessage) {
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "nvidia/nemotron-nano-9b-v2:free",
+                "model": "google/gemma-2-9b-it:free", // ✨ Naya Stable Model
                 "messages": [
                     { "role": "system", "content": "You are a polite assistant for Grah Sansar store. Reply in Hinglish." },
                     { "role": "user", "content": userMessage }
@@ -46,9 +46,15 @@ async function getAIResponse(userMessage) {
         });
 
         const data = await response.json();
-        if (data.choices && data.choices.length > 0) return data.choices[0].message.content;
-        return "Maaf kijiyega, system abhi update ho raha hai. Thodi der baad try karein.";
+        if (data.choices && data.choices.length > 0) {
+            return data.choices[0].message.content;
+        } else {
+            // ✨ Agar error aaya toh Render logs mein detail print karega
+            console.log("❌ OpenRouter Error Detail:", JSON.stringify(data));
+            return "Maaf kijiyega, system abhi update ho raha hai. Thodi der baad try karein.";
+        }
     } catch (error) {
+        console.log("❌ Fetch Error:", error.message);
         return "Network busy hai.";
     }
 }
