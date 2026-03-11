@@ -4,7 +4,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLat
 const pino = require('pino'); 
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000; // Render standard port
 
 let currentQR = "";
 let botStatus = "Starting...";
@@ -13,7 +13,7 @@ app.get('/', (req, res) => {
     if (botStatus === "Ready") {
         res.send('<h1 style="color:green; text-align:center; margin-top:50px; font-family: sans-serif;">✅ Grah Sansar Bot is ONLINE!</h1>');
     } else if (currentQR) {
-        res.send(`<div style="text-align:center; margin-top:50px; font-family: sans-serif;"><h2>QR Scan Karein:</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" style="border: 5px solid #25d366; border-radius: 10px;" /><p>Scan ke baad page refresh karein.</p></div>`);
+        res.send(`<div style="text-align:center; margin-top:50px; font-family: sans-serif;"><h2>Naya QR Scan Karein:</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" style="border: 5px solid #25d366; border-radius: 10px;" /><p>Note: Scan ke baad webpage refresh karein.</p></div>`);
     } else {
         res.send(`<h1 style="text-align:center; margin-top:50px; font-family: sans-serif;">Status: ${botStatus}</h1>`);
     }
@@ -34,40 +34,30 @@ async function getAIResponse(userMessage) {
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "nvidia/nemotron-nano-9b-v2:free", // Aapka tested model
+                "model": "nvidia/nemotron-nano-9b-v2:free",
                 "messages": [
-                    { 
-                        "role": "system", 
-                        "content": "You are a helpful assistant for 'Grah Sansar Department Store'. Reply in Hinglish. Be polite and ask for grocery list or delivery address." 
-                    },
+                    { "role": "system", "content": "You are a polite assistant for Grah Sansar store. Reply in Hinglish." },
                     { "role": "user", "content": userMessage }
                 ]
             })
         });
 
         const data = await response.json();
-        if (data.choices && data.choices[0]) {
-            return data.choices[0].message.content;
-        }
-        return "Maaf kijiyega, system busy hai. Kripya dukan par call karein.";
+        return data.choices[0].message.content;
     } catch (error) {
         console.error("AI Error:", error);
-        return "Network issue hai, thodi der baad koshish karein.";
+        return "Maaf kijiyega, system busy hai.";
     }
 }
 
 async function connectToWhatsApp() {
-    // Session ka naam naya rakha hai taaki Bad MAC error na aaye
-    const { state, saveCreds } = await useMultiFileAuthState('auth_session_nvidia_v2');
+    // --- SESSION FOLDER BADAL DIYA HAI (FIX FOR BAD MAC) ---
+    const { state, saveCreds } = await useMultiFileAuthState('session_march_11_fresh');
     const { version } = await fetchLatestBaileysVersion();
     
     const sock = makeWASocket({
-        version, 
-        auth: state, 
-        logger: pino({ level: 'silent' }), 
-        printQRInTerminal: false, 
-        browser: Browsers.macOS('Desktop'), 
-        syncFullHistory: false 
+        version, auth: state, logger: pino({ level: 'silent' }), 
+        printQRInTerminal: false, browser: Browsers.macOS('Desktop'), syncFullHistory: false 
     });
 
     sock.ev.on('connection.update', (update) => {
@@ -87,10 +77,16 @@ async function connectToWhatsApp() {
         if (!msg.message || msg.key.fromMe) return;
         const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
         if (!textMessage) return;
-        
         const aiReply = await getAIResponse(textMessage);
         await sock.sendMessage(msg.key.remoteJid, { text: aiReply });
     });
 }
+
+// Bot ko sleep se bachane ke liye self-ping
+setInterval(() => {
+    fetch(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}`)
+    .then(() => console.log("Pinged self to stay awake!"))
+    .catch(() => {});
+}, 600000); // Har 10 min
 
 connectToWhatsApp();
