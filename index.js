@@ -10,7 +10,6 @@ const PORT = process.env.PORT || 10000;
 let currentQR = "";
 let botStatus = "Starting...";
 
-// Chat memory jisse bot list yaad rakhega
 const chatMemory = {}; 
 
 app.get('/', (req, res) => {
@@ -30,8 +29,8 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 // --- ADVANCED AI RESPONSE FUNCTION ---
 async function getAIResponse(userMessage, userId) {
-    // Agar user naya hai, toh usko System Prompt (Rules) do
     if (!chatMemory[userId]) {
+        // ✨ FIX: NVIDIA supports pure System Prompts, making it strictly follow your rules
         chatMemory[userId] = [
             { 
                 "role": "system", 
@@ -53,10 +52,9 @@ async function getAIResponse(userMessage, userId) {
         ];
     }
 
-    // User ka message memory mein daalo
     chatMemory[userId].push({ "role": "user", "content": userMessage });
 
-    // Memory ko limit karo taaki OpenRouter error na de (Last 15 messages)
+    // Memory limit: System rule hamesha rahega, baki aakhiri ke 14 messages yaad rakhega
     if (chatMemory[userId].length > 15) {
         chatMemory[userId] = [chatMemory[userId][0], ...chatMemory[userId].slice(-14)];
     }
@@ -71,7 +69,7 @@ async function getAIResponse(userMessage, userId) {
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "google/gemma-3n-e4b-it:free", // Aapka chuna hua advanced model
+                "model": "nvidia/nemotron-3-nano-30b-a3b:free", // ✨ Aapka Naya NVIDIA Model
                 "messages": chatMemory[userId]
             })
         });
@@ -79,12 +77,11 @@ async function getAIResponse(userMessage, userId) {
         const data = await response.json();
         if (data.choices && data.choices.length > 0) {
             const aiReply = data.choices[0].message.content;
-            // AI ka reply bhi memory mein daalo taaki conversation flow bani rahe
             chatMemory[userId].push({ "role": "assistant", "content": aiReply });
             return aiReply;
         } else {
             console.log("❌ OpenRouter Error Detail:", JSON.stringify(data));
-            return "Maaf kijiyega, hamara system abhi update ho raha hai. Kripya thodi der baad try karein.";
+            return "Maaf kijiyega, system abhi thoda busy hai. Kripya 1 minute baad try karein.";
         }
     } catch (error) {
         console.log("❌ Fetch Error:", error.message);
@@ -177,7 +174,6 @@ async function connectToWhatsApp() {
         const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
         if (!textMessage) return;
         
-        // Pass the user's phone number to maintain individual memory
         const userId = msg.key.remoteJid;
         const aiReply = await getAIResponse(textMessage, userId);
         
