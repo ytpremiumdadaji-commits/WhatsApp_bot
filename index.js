@@ -13,16 +13,12 @@ let botStatus = "Starting...";
 const chatMemory = {}; 
 
 app.get('/', (req, res) => {
-    if (botStatus === "Ready") {
-        res.send('<h1 style="color:green; text-align:center; margin-top:50px; font-family: sans-serif;">✅ Grah Sansar Advanced Bot is ONLINE!</h1>');
-    } else if (currentQR) {
-        res.send(`<div style="text-align:center; margin-top:50px; font-family: sans-serif;"><h2>Naya QR Scan Karein:</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" style="border: 5px solid #25d366; border-radius: 10px;" /></div>`);
-    } else {
-        res.send(`<h1 style="text-align:center; margin-top:50px; font-family: sans-serif;">Status: ${botStatus}</h1>`);
-    }
+    if (botStatus === "Ready") res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Grah Sansar Bot ONLINE!</h1>');
+    else if (currentQR) res.send(`<div style="text-align:center; margin-top:50px;"><h2>Naya QR Scan Karein:</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentQR)}" style="border: 5px solid #25d366; border-radius: 10px;" /></div>`);
+    else res.send(`<h1 style="text-align:center; margin-top:50px;">Status: ${botStatus}</h1>`);
 });
 
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
@@ -33,20 +29,19 @@ async function getAIResponse(userMessage, userId) {
         chatMemory[userId] = [
             { 
                 "role": "system", 
-                "content": `You are 'GS AI', a highly professional Virtual Assistant for 'Grih Sansar Departmental Store'. Strictly speak in Hinglish. NEVER invent a different name.
+                "content": `You are 'GS AI', a highly professional Virtual Assistant for 'Grih Sansar Departmental Store'. Strictly speak in Hinglish.
 
                 STRICT RULES & CONVERSATION FLOW:
                 
-                STEP 1 (MANDATORY FIRST GREETING): Whenever a user sends their FIRST message, your reply MUST ALWAYS start with this EXACT decorated greeting:
+                STEP 1 (MANDATORY FIRST GREETING): Whenever a user sends their FIRST message, your reply MUST ALWAYS start with this EXACT decorated greeting (Do NOT use their name):
                 
                 ✨ *Namaskar!* 🙏
                 🛒 *Grih Sansar Departmental Store* mein aapka swagat hai! 🎉
-                🤖 Main *GS AI* hoon, aapka apna Virtual Assistant. 
-                🛍️ Ghar ki kharidaari, 🍲 recipes, aur 📝 shopping list ke liye main hamesha aapki seva mein hazir hoon.
+                🤖 Main *GS AI* hoon. 🛍️ Ghar ki kharidaari, 🍲 recipes, aur 📝 shopping list ke liye main aapki seva mein hazir hoon.
                 
                 (Process their request below this greeting).
 
-                STEP 2 (LIST MAKING): Format lists strictly using numbers (1., 2., 3.). Auto-correct spellings. Include ingredients for recipes if asked.
+                STEP 2 (LIST MAKING): Format lists strictly using numbers (1., 2., 3.). Auto-correct spellings.
 
                 STEP 3 (CONFIRMATION MENU): When list is complete, show the final formatted list and EXACTLY this menu:
                 📦 *Aapka Order Ready Hai!* Aage badhne ke liye number chunein:
@@ -54,17 +49,17 @@ async function getAIResponse(userMessage, userId) {
                 [2] ✏️ Edit List / Add Items
                 [3] ❌ Cancel Order
 
-                STEP 4 (ADDRESS): If user replies '1', ask:
-                📍 "Kripya apna *Delivery Address* aur *Contact Number* bataiye taaki hum aapka order bhej sakein."
+                STEP 4 (ADDRESS): If user replies '1', ask VERY POLITELY:
+                📍 "Kya order aapke regular address par bhejna hai, ya aap dukan se pick-up karenge? (Agar naya address hai toh kripya type karein)."
 
-                STEP 5 (FINAL CHECKOUT & SECRET SUMMARY): Once they provide address/number (or say no), you MUST reply in this EXACT format below. Do not change the separator "===ORDER_SUMMARY===".
+                STEP 5 (FINAL CHECKOUT & SECRET SUMMARY): Once they reply about address, finalize the order EXACTLY with this message below. Do not change the separator "===ORDER_SUMMARY===".
                 
                 ✅ "Aapka order successfully place ho gaya hai! 🎉 Hum jaldi hi isko aap tak deliver karenge.\n\n💖 *Thanks For Shopping at Grih Sansar Departmental Store!* Aapka din shubh ho. 🙏"
                 ===ORDER_SUMMARY===
                 *Final Items:*
                 [List the items here]
-                *Address/Contact Info:*
-                [What they provided, or "User did not provide"]` 
+                *Delivery/Pick-up Info:*
+                [What they provided]` 
             }
         ];
     }
@@ -85,7 +80,7 @@ async function getAIResponse(userMessage, userId) {
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+                "model": "google/gemini-2.0-flash-lite-preview-02-05:free", 
                 "messages": chatMemory[userId]
             })
         });
@@ -105,7 +100,6 @@ async function getAIResponse(userMessage, userId) {
 
 // --- WHATSAPP CONNECTION ---
 const useSupabaseAuthState = async (sessionName = 'grah_sansar_auth') => {
-    // ... (Supabase adapter remains exactly the same as before)
     const writeData = async (data, id) => {
         const str = JSON.stringify(data, BufferJSON.replacer);
         await supabase.from('baileys_session').upsert({ id: `${sessionName}-${id}`, data: str });
@@ -183,8 +177,10 @@ async function connectToWhatsApp() {
         if (!textMessage) return;
         
         const userId = msg.key.remoteJid;
+        
+        // ✨ WhatsApp Profile Name (Sirf Owner Group ke liye use hoga)
+        const pushName = msg.pushName || "Customer"; 
 
-        // ✨ FEATURE: Group ID nikalne ka command
         if (textMessage === '!getid') {
             await sock.sendMessage(userId, { text: `Is Group ka ID hai:\n*${userId}*` });
             return;
@@ -192,24 +188,22 @@ async function connectToWhatsApp() {
         
         const aiReply = await getAIResponse(textMessage, userId);
         
-        // ✨ FEATURE: Order split karke group mein bhejna
         if (aiReply.includes("===ORDER_SUMMARY===")) {
             const parts = aiReply.split("===ORDER_SUMMARY===");
             const customerMessage = parts[0].trim();
             const orderDetails = parts[1].trim();
             const customerPhone = userId.split('@')[0];
-            const groupJid = process.env.OWNER_GROUP_JID; // Render se aayega
+            const groupJid = process.env.OWNER_GROUP_JID;
 
-            // 1. Customer ko sirf Thank You message bhejo
+            // Customer ko sirf saaf-suthra reply jayega
             await sock.sendMessage(userId, { text: customerMessage });
 
-            // 2. Owner Group mein puri detail bhejo
             if (groupJid) {
-                const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n📱 *Customer Number:* +${customerPhone}\n\n🛒 *Order Details:*\n${orderDetails}`;
+                // Admin Group mein Customer ka naam jayega!
+                const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n👤 *Customer Name:* ${pushName}\n📱 *Customer Number:* +${customerPhone}\n\n🛒 *Order Details:*\n${orderDetails}`;
                 await sock.sendMessage(groupJid, { text: groupMessage });
             }
         } else {
-            // Normal chatting
             await sock.sendMessage(userId, { text: aiReply });
         }
     });
