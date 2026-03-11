@@ -30,38 +30,47 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // --- ADVANCED AI RESPONSE FUNCTION ---
 async function getAIResponse(userMessage, userId) {
     if (!chatMemory[userId]) {
-        // ✨ FIX: Strict Professional Persona and Exact Flow Added
         chatMemory[userId] = [
             { 
                 "role": "system", 
-                "content": `You are 'GS AI', a highly professional, extremely polite Virtual Assistant for 'Grih Sansar Departmental Store'. Strictly speak in Hinglish. NEVER invent a different name.
+                "content": `You are 'GS AI', a highly professional Virtual Assistant for 'Grih Sansar Departmental Store'. Strictly speak in Hinglish. NEVER invent a different name.
 
                 STRICT RULES & CONVERSATION FLOW:
                 
-                STEP 1 (GREETING): When a user first says Hi/Hello, reply EXACTLY with this and nothing else:
-                "Namaskar 🙏,\nGrih Sansar Departmental Store mein aapka swagat hai!\nMain GS AI hoon, aapki ghar-ki kharidaari, recipes, aur shopping list ke liye hamesha aapki seva mein hazir hoon. Batiye, aaj main aapki kya madad kar sakta hoon?"
+                STEP 1 (MANDATORY FIRST GREETING): Whenever a user sends their FIRST message, your reply MUST ALWAYS start with this EXACT decorated greeting:
+                
+                ✨ *Namaskar!* 🙏
+                🛒 *Grih Sansar Departmental Store* mein aapka swagat hai! 🎉
+                🤖 Main *GS AI* hoon, aapka apna Virtual Assistant. 
+                🛍️ Ghar ki kharidaari, 🍲 recipes, aur 📝 shopping list ke liye main hamesha aapki seva mein hazir hoon.
+                
+                (Process their request below this greeting).
 
-                STEP 2 (LIST MAKING): Help users make their grocery list. Auto-correct wrong spellings silently. Format lists strictly using numbers (1., 2., 3.). If they ask for a recipe, list ingredients and ask if you should add them to the list.
+                STEP 2 (LIST MAKING): Format lists strictly using numbers (1., 2., 3.). Auto-correct spellings. Include ingredients for recipes if asked.
 
-                STEP 3 (CONFIRMATION MENU): When the user says their list is complete, show the final list and then show EXACTLY this menu:
-                "Order Confirm Karne Ke Liye 1 Likhe
-                Order Ko Edit Karne ke Liye 2 Likhe
-                Order Cancel Karne Ke Liye 3 Likhe"
+                STEP 3 (CONFIRMATION MENU): When list is complete, show the final formatted list and EXACTLY this menu:
+                📦 *Aapka Order Ready Hai!* Aage badhne ke liye number chunein:
+                [1] ✅ Confirm Order
+                [2] ✏️ Edit List / Add Items
+                [3] ❌ Cancel Order
 
-                STEP 4 (ADDRESS): If the user replies with '1', ask them:
-                "Kripya apna Delivery Address aur Contact Number bataiye taaki hum aapka order bhej sakein."
+                STEP 4 (ADDRESS): If user replies '1', ask:
+                📍 "Kripya apna *Delivery Address* aur *Contact Number* bataiye taaki hum aapka order bhej sakein."
 
-                STEP 5 (FINAL CHECKOUT): Once they provide the address/number (or simply reply yes/no), finalize the order EXACTLY with this:
-                "Aapka order successfully place ho gaya hai! 🎉 Hum jaldi hi isko aap tak deliver karenge.\n\nThanks For Shopping at Grih Sansar Departmental Store! Aapka din shubh ho. 🙏"
-
-                IMPORTANT: Always treat repeat users with the same high level of respect. Never add extra unnecessary talk. Be professional and act like a premium store manager.` 
+                STEP 5 (FINAL CHECKOUT & SECRET SUMMARY): Once they provide address/number (or say no), you MUST reply in this EXACT format below. Do not change the separator "===ORDER_SUMMARY===".
+                
+                ✅ "Aapka order successfully place ho gaya hai! 🎉 Hum jaldi hi isko aap tak deliver karenge.\n\n💖 *Thanks For Shopping at Grih Sansar Departmental Store!* Aapka din shubh ho. 🙏"
+                ===ORDER_SUMMARY===
+                *Final Items:*
+                [List the items here]
+                *Address/Contact Info:*
+                [What they provided, or "User did not provide"]` 
             }
         ];
     }
 
     chatMemory[userId].push({ "role": "user", "content": userMessage });
 
-    // Memory limit: Keep the system rules intact, remember last 14 interactions
     if (chatMemory[userId].length > 15) {
         chatMemory[userId] = [chatMemory[userId][0], ...chatMemory[userId].slice(-14)];
     }
@@ -87,17 +96,16 @@ async function getAIResponse(userMessage, userId) {
             chatMemory[userId].push({ "role": "assistant", "content": aiReply });
             return aiReply;
         } else {
-            console.log("❌ OpenRouter Error Detail:", JSON.stringify(data));
             return "Maaf kijiyega, system abhi thoda busy hai. Kripya thodi der baad try karein.";
         }
     } catch (error) {
-        console.log("❌ Fetch Error:", error.message);
         return "Network busy hai, kripya dobara message bhejein.";
     }
 }
 
-// --- SUPABASE PERMANENT SESSION ADAPTER ---
+// --- WHATSAPP CONNECTION ---
 const useSupabaseAuthState = async (sessionName = 'grah_sansar_auth') => {
+    // ... (Supabase adapter remains exactly the same as before)
     const writeData = async (data, id) => {
         const str = JSON.stringify(data, BufferJSON.replacer);
         await supabase.from('baileys_session').upsert({ id: `${sessionName}-${id}`, data: str });
@@ -144,18 +152,13 @@ const useSupabaseAuthState = async (sessionName = 'grah_sansar_auth') => {
     };
 };
 
-// --- WHATSAPP CONNECTION ---
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useSupabaseAuthState();
     const { version } = await fetchLatestBaileysVersion();
     
     const sock = makeWASocket({
-        version, 
-        auth: state, 
-        logger: pino({ level: 'silent' }), 
-        printQRInTerminal: false, 
-        browser: Browsers.macOS('Desktop'), 
-        syncFullHistory: false,
+        version, auth: state, logger: pino({ level: 'silent' }), 
+        printQRInTerminal: false, browser: Browsers.macOS('Desktop'), syncFullHistory: false,
         getMessage: async () => { return { conversation: 'hello' }; }
     });
 
@@ -164,9 +167,7 @@ async function connectToWhatsApp() {
         if (qr) { currentQR = qr; botStatus = "Waiting for Scan"; }
         if (connection === 'close') {
             const reason = lastDisconnect.error?.output?.statusCode;
-            if (reason === DisconnectReason.loggedOut) {
-                supabase.from('baileys_session').delete().like('id', 'grah_sansar_auth-%').then(() => console.log('Session wiped.'));
-            }
+            if (reason === DisconnectReason.loggedOut) supabase.from('baileys_session').delete().like('id', 'grah_sansar_auth-%');
             setTimeout(() => connectToWhatsApp(), 5000);
         } else if (connection === 'open') { currentQR = ""; botStatus = "Ready"; }
     });
@@ -182,17 +183,40 @@ async function connectToWhatsApp() {
         if (!textMessage) return;
         
         const userId = msg.key.remoteJid;
+
+        // ✨ FEATURE: Group ID nikalne ka command
+        if (textMessage === '!getid') {
+            await sock.sendMessage(userId, { text: `Is Group ka ID hai:\n*${userId}*` });
+            return;
+        }
+        
         const aiReply = await getAIResponse(textMessage, userId);
         
-        await sock.sendMessage(userId, { text: aiReply });
+        // ✨ FEATURE: Order split karke group mein bhejna
+        if (aiReply.includes("===ORDER_SUMMARY===")) {
+            const parts = aiReply.split("===ORDER_SUMMARY===");
+            const customerMessage = parts[0].trim();
+            const orderDetails = parts[1].trim();
+            const customerPhone = userId.split('@')[0];
+            const groupJid = process.env.OWNER_GROUP_JID; // Render se aayega
+
+            // 1. Customer ko sirf Thank You message bhejo
+            await sock.sendMessage(userId, { text: customerMessage });
+
+            // 2. Owner Group mein puri detail bhejo
+            if (groupJid) {
+                const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n📱 *Customer Number:* +${customerPhone}\n\n🛒 *Order Details:*\n${orderDetails}`;
+                await sock.sendMessage(groupJid, { text: groupMessage });
+            }
+        } else {
+            // Normal chatting
+            await sock.sendMessage(userId, { text: aiReply });
+        }
     });
 }
 
-// Bot ko sleep mode se bachane ke liye
 setInterval(() => {
-    fetch(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}`)
-    .then(() => console.log("Pinged self!"))
-    .catch(() => {});
+    fetch(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}`).catch(() => {});
 }, 600000); 
 
 connectToWhatsApp();
