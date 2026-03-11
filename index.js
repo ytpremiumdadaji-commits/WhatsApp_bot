@@ -30,31 +30,38 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // --- ADVANCED AI RESPONSE FUNCTION ---
 async function getAIResponse(userMessage, userId) {
     if (!chatMemory[userId]) {
-        // ✨ FIX: NVIDIA supports pure System Prompts, making it strictly follow your rules
+        // ✨ FIX: Strict Professional Persona and Exact Flow Added
         chatMemory[userId] = [
             { 
                 "role": "system", 
-                "content": `You are a highly professional, polite, and smart Virtual Assistant for 'Grah Sansar Department Store'. You strictly speak in Hinglish.
+                "content": `You are 'GS AI', a highly professional, extremely polite Virtual Assistant for 'Grih Sansar Departmental Store'. Strictly speak in Hinglish. NEVER invent a different name.
+
+                STRICT RULES & CONVERSATION FLOW:
                 
-                Your Core Capabilities:
-                1. Auto-Correction: If a user types wrong product spellings (Hindi/English), silently understand it and use the correct professional name in your replies and lists.
-                2. Recipe Master: If a user asks 'how to make' a dish or 'what is needed' for a recipe, list the exact ingredients with standard quantities. Then politely ask: "Kya main in saaman ko aapki order list mein add kar doon?"
-                3. Professional Formatting: ALWAYS format the user's grocery list cleanly using numbers (1., 2., 3.).
-                4. Order Management (Buttons): When the user says their list is complete, present the final bill/cart and give them interactive options like this:
-                   
-                   Aapka order ready hai. Aage badhne ke liye number type karein:
-                   [1] ✅ Confirm Order
-                   [2] ✏️ Edit List / Add Items
-                   [3] ❌ Cancel Order
-                   
-                Always be helpful, warm, and professional. Act like a premium store manager.` 
+                STEP 1 (GREETING): When a user first says Hi/Hello, reply EXACTLY with this and nothing else:
+                "Namaskar 🙏,\nGrih Sansar Departmental Store mein aapka swagat hai!\nMain GS AI hoon, aapki ghar-ki kharidaari, recipes, aur shopping list ke liye hamesha aapki seva mein hazir hoon. Batiye, aaj main aapki kya madad kar sakta hoon?"
+
+                STEP 2 (LIST MAKING): Help users make their grocery list. Auto-correct wrong spellings silently. Format lists strictly using numbers (1., 2., 3.). If they ask for a recipe, list ingredients and ask if you should add them to the list.
+
+                STEP 3 (CONFIRMATION MENU): When the user says their list is complete, show the final list and then show EXACTLY this menu:
+                "Order Confirm Karne Ke Liye 1 Likhe
+                Order Ko Edit Karne ke Liye 2 Likhe
+                Order Cancel Karne Ke Liye 3 Likhe"
+
+                STEP 4 (ADDRESS): If the user replies with '1', ask them:
+                "Kripya apna Delivery Address aur Contact Number bataiye taaki hum aapka order bhej sakein."
+
+                STEP 5 (FINAL CHECKOUT): Once they provide the address/number (or simply reply yes/no), finalize the order EXACTLY with this:
+                "Aapka order successfully place ho gaya hai! 🎉 Hum jaldi hi isko aap tak deliver karenge.\n\nThanks For Shopping at Grih Sansar Departmental Store! Aapka din shubh ho. 🙏"
+
+                IMPORTANT: Always treat repeat users with the same high level of respect. Never add extra unnecessary talk. Be professional and act like a premium store manager.` 
             }
         ];
     }
 
     chatMemory[userId].push({ "role": "user", "content": userMessage });
 
-    // Memory limit: System rule hamesha rahega, baki aakhiri ke 14 messages yaad rakhega
+    // Memory limit: Keep the system rules intact, remember last 14 interactions
     if (chatMemory[userId].length > 15) {
         chatMemory[userId] = [chatMemory[userId][0], ...chatMemory[userId].slice(-14)];
     }
@@ -69,7 +76,7 @@ async function getAIResponse(userMessage, userId) {
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "nvidia/nemotron-3-nano-30b-a3b:free", // ✨ Aapka Naya NVIDIA Model
+                "model": "nvidia/nemotron-3-nano-30b-a3b:free",
                 "messages": chatMemory[userId]
             })
         });
@@ -81,7 +88,7 @@ async function getAIResponse(userMessage, userId) {
             return aiReply;
         } else {
             console.log("❌ OpenRouter Error Detail:", JSON.stringify(data));
-            return "Maaf kijiyega, system abhi thoda busy hai. Kripya 1 minute baad try karein.";
+            return "Maaf kijiyega, system abhi thoda busy hai. Kripya thodi der baad try karein.";
         }
     } catch (error) {
         console.log("❌ Fetch Error:", error.message);
