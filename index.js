@@ -33,11 +33,11 @@ async function getAIResponse(userMessage) {
             headers: {
                 "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://render.com",
+                "HTTP-Referer": "https://whatsapp-bot-1tm4.onrender.com", // Aapki site URL
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "google/gemma-2-9b-it:free", // ✨ Naya Stable Model
+                "model": "arcee-ai/trinity-large-preview:free", // ✨ Aapka Naya Model
                 "messages": [
                     { "role": "system", "content": "You are a polite assistant for Grah Sansar store. Reply in Hinglish." },
                     { "role": "user", "content": userMessage }
@@ -49,7 +49,7 @@ async function getAIResponse(userMessage) {
         if (data.choices && data.choices.length > 0) {
             return data.choices[0].message.content;
         } else {
-            // ✨ Agar error aaya toh Render logs mein detail print karega
+            // Error track karne ke liye
             console.log("❌ OpenRouter Error Detail:", JSON.stringify(data));
             return "Maaf kijiyega, system abhi update ho raha hai. Thodi der baad try karein.";
         }
@@ -127,7 +127,6 @@ async function connectToWhatsApp() {
         if (qr) { currentQR = qr; botStatus = "Waiting for Scan"; }
         if (connection === 'close') {
             const reason = lastDisconnect.error?.output?.statusCode;
-            // Agar phone se manually logout kiya, toh Supabase database clear kar dega
             if (reason === DisconnectReason.loggedOut) {
                 supabase.from('baileys_session').delete().like('id', 'grah_sansar_auth-%').then(() => console.log('Session wiped.'));
             }
