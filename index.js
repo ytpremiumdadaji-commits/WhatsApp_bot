@@ -11,6 +11,7 @@ let currentQR = "";
 let botStatus = "Starting...";
 
 const chatMemory = {}; 
+const pendingTimers = {}; // ✨ NAYA: 3 Minute ka Timer System
 
 app.get('/', (req, res) => {
     if (botStatus === "Ready") res.send('<h1 style="color:green; text-align:center; margin-top:50px;">✅ Grah Sansar Bot ONLINE!</h1>');
@@ -173,16 +174,36 @@ async function connectToWhatsApp() {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
         
-        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
-        if (!textMessage) return;
-        
         const userId = msg.key.remoteJid;
         const pushName = msg.pushName || "Customer"; 
         
-        // ✨ SUPER MAGIC: WhatsApp ki Hidden Privacy ko bypass karke Asli Number nikalna!
-        // Ye code background mein chhipe 'remoteJidAlt' ya 'senderPn' ko dhundhega
+        // ✨ PURANA SUPER MAGIC: Asli 10-Digit number nikalna (Safe hai)
         const hiddenRealId = msg.key.remoteJidAlt || msg.key.senderPn || msg.senderPn || userId;
-        const realNumber = String(hiddenRealId).split('@')[0].replace(/\D/g, ''); // Sirf asli digits nikalega
+        const realNumber = String(hiddenRealId).split('@')[0].replace(/\D/g, ''); 
+
+        // Agar customer ne reply de diya, toh purana timer rok do (taaki double message na jaye)
+        if (pendingTimers[userId]) {
+            clearTimeout(pendingTimers[userId]);
+            delete pendingTimers[userId];
+        }
+
+        // ✨ PURANA PHOTO/AUDIO DETECTOR (Safe hai)
+        const isMedia = msg.message.imageMessage || msg.message.audioMessage || msg.message.videoMessage || msg.message.documentMessage;
+        if (isMedia) {
+            const customerReply = "✨ *Namaskar!* 🙏\n\nKya ye aapke saman ki list hai? Maine is photo/recording ko direct dukan par admin ko bhej diya hai taaki aapka order jaldi se ready ho sake! 📦✅\n\nAgar isme kuch aur add karna ho toh aap likh kar bata sakte hain.";
+            await sock.sendMessage(userId, { text: customerReply });
+
+            const groupJid = process.env.OWNER_GROUP_JID;
+            if (groupJid) {
+                const groupMessage = `🚨 *NEW MEDIA ORDER RECEIVED* 🚨\n\n👤 *Profile Name:* ${pushName}\n📱 *Customer Number:* +${realNumber}\n🔗 *Direct Chat:* wa.me/${realNumber}\n\n👇 *Customer ne ye Photo / Voice Note bheja hai:*`;
+                await sock.sendMessage(groupJid, { text: groupMessage });
+                await sock.sendMessage(groupJid, { forward: msg });
+            }
+            return; 
+        }
+
+        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        if (!textMessage) return;
 
         if (textMessage === '!getid') {
             await sock.sendMessage(userId, { text: `Is Group ka ID hai:\n*${userId}*` });
@@ -197,17 +218,58 @@ async function connectToWhatsApp() {
             const orderDetails = parts[1].trim();
             
             const groupJid = process.env.OWNER_GROUP_JID;
-
-            // Customer ko pyara sa order confirmation
             await sock.sendMessage(userId, { text: customerMessage });
 
             if (groupJid) {
-                // Admin Group mein ab Asli Number aur Sahi Link aayegi!
                 const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n👤 *Profile Name:* ${pushName}\n📱 *Customer Number:* +${realNumber}\n🔗 *Direct Chat:* wa.me/${realNumber}\n\n🛒 *Order Details:*\n${orderDetails}`;
                 await sock.sendMessage(groupJid, { text: groupMessage });
             }
+            
+            // Order complete hone par memory saaf kardo taaki agli baar fresh start ho
+            delete chatMemory[userId]; 
+
         } else {
+            // Normal message user ko bhejna
             await sock.sendMessage(userId, { text: aiReply });
+
+            // ✨ NAYA: AUTO-CONFIRM TIMER LOGIC
+            // Agar bot ne customer se 'Confirm' karne ko poocha hai:
+            if (aiReply.includes("📦 *Aapka Order Ready Hai!*") || aiReply.includes("regular address par bhejna hai")) {
+                
+                // 3 Minute (180,000 milliseconds) ka timer chalu karo
+                pendingTimers[userId] = setTimeout(async () => {
+                    try {
+                        let orderListText = "";
+                        
+                        // Chat memory se customer ki aakhiri list nikalna
+                        const aiMessages = chatMemory[userId].filter(m => m.role === 'assistant' && m.content.includes("📦 *Aapka Order Ready Hai!*"));
+                        if (aiMessages.length > 0) {
+                            const lastListMsg = aiMessages[aiMessages.length - 1].content;
+                            orderListText = lastListMsg.split("📦")[0].trim(); // Sirf list nikalega
+                        } else {
+                            orderListText = "Chat se list auto-fetch ki gayi hai.";
+                        }
+
+                        // 1. Customer ko Final Success Message
+                        const autoSuccessMsg = "⏳ *Auto-Confirm:* Aapne thodi der tak koi reply nahi diya, isliye maine aapki is list ko final order samajh kar dukan par bhej diya hai! 🎉\n\nJaldi hi delivery hogi. Agar kuch aur chahiye toh aap naya message bhej sakte hain. 🙏";
+                        await sock.sendMessage(userId, { text: autoSuccessMsg });
+
+                        // 2. Owner Group me Chup-Chap bhej dena
+                        const groupJid = process.env.OWNER_GROUP_JID;
+                        if (groupJid) {
+                            const groupMessage = `🚨 *AUTO-CONFIRMED ORDER (NO REPLY)* 🚨\n\n👤 *Profile Name:* ${pushName}\n📱 *Customer Number:* +${realNumber}\n🔗 *Direct Chat:* wa.me/${realNumber}\n\n🛒 *Order Details:*\n${orderListText}\n\n📍 *(Customer ne confirm menu ka reply nahi diya tha, isliye 3 minute baad auto-forward hua hai)*`;
+                            await sock.sendMessage(groupJid, { text: groupMessage });
+                        }
+
+                        // Order complete ho gaya, memory saaf kardo
+                        delete chatMemory[userId];
+                        delete pendingTimers[userId];
+
+                    } catch (err) {
+                        console.log("Auto Confirm Timeout Error:", err);
+                    }
+                }, 3 * 60 * 1000); // 3 * 60 * 1000 = 3 Minutes
+            }
         }
     });
 }
