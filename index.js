@@ -177,9 +177,10 @@ async function connectToWhatsApp() {
         if (!textMessage) return;
         
         const userId = msg.key.remoteJid;
-        
-        // Customer ka WhatsApp Profile Name
         const pushName = msg.pushName || "Customer"; 
+        
+        // ✨ MAGIC: Ye line bilkul perfect Asli 10-Digit number nikalegi bina kisi error ke!
+        const realNumber = userId.split('@')[0].split(':')[0];
 
         if (textMessage === '!getid') {
             await sock.sendMessage(userId, { text: `Is Group ka ID hai:\n*${userId}*` });
@@ -193,17 +194,14 @@ async function connectToWhatsApp() {
             const customerMessage = parts[0].trim();
             const orderDetails = parts[1].trim();
             
-            // ✨ AUTOMATIC NUMBER EXTRACTOR (100% Silent)
-            let customerPhone = userId.split('@')[0];
-            
             const groupJid = process.env.OWNER_GROUP_JID;
 
-            // Customer ko pyara message aur Address confirm
+            // Customer ko pyara aur professional reply
             await sock.sendMessage(userId, { text: customerMessage });
 
             if (groupJid) {
-                // Owner Group mein PushName aur Asli Phone Number dono aayenge
-                const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n👤 *WhatsApp Name:* ${pushName}\n📱 *Customer Number:* +${customerPhone}\n\n🛒 *Order Details:*\n${orderDetails}`;
+                // Admin Group mein Order aur Clickable Number Link dono jayenge!
+                const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n👤 *Profile Name:* ${pushName}\n📱 *Customer Number:* +${realNumber}\n🔗 *Direct Chat:* wa.me/${realNumber}\n\n🛒 *Order Details:*\n${orderDetails}`;
                 await sock.sendMessage(groupJid, { text: groupMessage });
             }
         } else {
