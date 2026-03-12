@@ -26,6 +26,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // --- ADVANCED AI RESPONSE FUNCTION ---
 async function getAIResponse(userMessage, userId) {
     if (!chatMemory[userId]) {
+        // ✨ Wapas "System" role laga diya kyunki NVIDIA isko perfectly samajhta hai
         chatMemory[userId] = [
             { 
                 "role": "system", 
@@ -80,7 +81,7 @@ async function getAIResponse(userMessage, userId) {
                 "X-OpenRouter-Title": "Grah Sansar"
             },
             body: JSON.stringify({
-                "model": "google/gemini-2.0-flash-lite-preview-02-05:free", 
+                "model": "nvidia/nemotron-3-nano-30b-a3b:free", // ✨ AAPKA CHUNA HUA NVIDIA MODEL
                 "messages": chatMemory[userId]
             })
         });
@@ -91,10 +92,16 @@ async function getAIResponse(userMessage, userId) {
             chatMemory[userId].push({ "role": "assistant", "content": aiReply });
             return aiReply;
         } else {
-            return "Maaf kijiyega, system abhi thoda busy hai. Kripya thodi der baad try karein.";
+            console.log("❌ OpenRouter Error Detail:", JSON.stringify(data));
+            let errorMsg = "Unknown Error";
+            if(data.error) {
+                errorMsg = data.error.message || JSON.stringify(data.error);
+            }
+            return `⚠️ API Error: ${errorMsg}\n\nYe error OpenRouter se aa raha hai, iska matlab server busy hai.`;
         }
     } catch (error) {
-        return "Network busy hai, kripya dobara message bhejein.";
+        console.log("❌ Fetch Error:", error.message);
+        return `⚠️ Network Error: ${error.message}\n\nServer timeout ho raha hai.`;
     }
 }
 
@@ -178,7 +185,7 @@ async function connectToWhatsApp() {
         
         const userId = msg.key.remoteJid;
         
-        // ✨ WhatsApp Profile Name (Sirf Owner Group ke liye use hoga)
+        // Customer Profile Name (Sirf Admin Group ke liye)
         const pushName = msg.pushName || "Customer"; 
 
         if (textMessage === '!getid') {
@@ -195,11 +202,11 @@ async function connectToWhatsApp() {
             const customerPhone = userId.split('@')[0];
             const groupJid = process.env.OWNER_GROUP_JID;
 
-            // Customer ko sirf saaf-suthra reply jayega
+            // Customer ko pyara sa message
             await sock.sendMessage(userId, { text: customerMessage });
 
             if (groupJid) {
-                // Admin Group mein Customer ka naam jayega!
+                // Admin Group mein Naam aur Number dono!
                 const groupMessage = `🚨 *NEW ORDER RECEIVED* 🚨\n\n👤 *Customer Name:* ${pushName}\n📱 *Customer Number:* +${customerPhone}\n\n🛒 *Order Details:*\n${orderDetails}`;
                 await sock.sendMessage(groupJid, { text: groupMessage });
             }
